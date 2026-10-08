@@ -104,13 +104,9 @@ python -m orch -p 你的仓库 report
 - 编排器从不改动你自己的工作目录，合并在单独的 integration worktree 里进行。
 - agent 会在自己的 worktree 里执行任意命令，请只用在你自己的仓库上。
 - 编排器不读取、不复制任何登录凭证，命令行工具各自用自己的登录。
-- orch 自己做的提交用你的 git 身份（`git config user.name / user.email`，或 `.agents/orch.toml` 里的 `[git] name / email`），
-  项目历史里显示的是你的名字，不是机器人。
 
 ## 更新记录
 
-- **0.3.3**：orch 自己做的提交（checkpoint、合并、项目记忆、决策记录）都用你的身份：先看 `.agents/orch.toml` 的
-  `[git] name / email`，没有就用项目自己的 git 身份，两样都没有才用 `orch`。
 - **0.3.2**：`orch key` 和 `orch connect`：在命令行里用你自己的 DeepSeek、GPT、Claude、千问、Gemini、豆包账号
   （Windows 上 key 加密保存）；写清楚从下载到第一个任务的步骤。
 - **0.3.1**：MCP 服务（`orch mcp`），可以在 Claude Desktop 等聊天应用里查看、添加、运行和跟进任务；

@@ -128,13 +128,9 @@ Tools: `orch_list_projects`, `orch_list_tasks`, `orch_task`, `orch_add_task`, `o
 - The orchestrator never touches your own checkout; merges happen in a separate integration worktree.
 - Agents run arbitrary commands inside their worktree. Use it on your own repositories.
 - No credentials are read or copied by the orchestrator; CLIs use their own sign-in.
-- orch's own commits use your git identity (`git config user.name / user.email`, or `[git] name / email` in
-  `.agents/orch.toml`), so the project history shows your name, not a bot's.
 
 ## Changelog
 
-- **0.3.3**: orch's own commits (checkpoints, merges, project memory, decision records) are made as you: the
-  `[git] name / email` in `.agents/orch.toml`, otherwise the project's own git identity; `orch` only when neither is set.
 - **0.3.2**: `orch key` and `orch connect`: use your own DeepSeek, GPT, Claude, Qwen, Gemini and Doubao
   accounts from the command line (keys encrypted on Windows); step-by-step getting started.
 - **0.3.1**: MCP server (`orch mcp`) to list, add, run and follow tasks from chat apps such as Claude Desktop;
