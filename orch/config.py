@@ -21,6 +21,7 @@ worktrees_dir = ""                     # 空 = <项目目录>.worktrees（放在
 
 [escalation]
 verify_failures = 2                    # 同一执行者验收连续失败几次就升级到下一个池
+early_escalation = true                # 不等次数用完就升级：这次运行没改任何文件，或者验收报错和上一次完全一样
 max_runs_per_task = 4                  # 单个任务最多让 agent 实际工作几次（崩溃、限流不计入）
 run_timeout_minutes = 45               # 单次运行超时
 breaker_threshold = 2                  # 同一池连续几次崩溃类失败就熔断（限流 / 认证失败会立即熔断）

@@ -8,6 +8,22 @@ needs, which keeps token use and cost down.
 Python 3.11+, standard library only. Built and used on Windows. A full guide in Chinese is in
 [docs/README.zh-CN.md](docs/README.zh-CN.md).
 
+## What you can do with it today
+
+- Give a coding task to your own models from the command line, or from a chat app such as Claude Desktop (MCP).
+  It counts as done only when your tests pass.
+- Use the accounts you already have: Claude Code and Codex subscriptions, and API keys for DeepSeek, GPT, Claude,
+  Qwen, Gemini and Doubao (`orch connect` shows what works).
+- Start each task on the cheapest suitable model and move it to a stronger one when it fails, crashes, hits a
+  rate limit or gets stuck; the next model continues from a handoff note.
+- Turn a larger goal into tasks you approve (`orch plan`), or let two vendors propose and critique a design and a
+  judge write the decision record (`orch decide`).
+- Run several tasks at once, each in its own git worktree, and merge them automatically or by hand.
+- See what every model cost and how often it passed first time (`orch report`), and exactly what each call was sent
+  (`orch context`).
+- Hand the whole project to a new chat session with one generated file (`orch handoff export`).
+- Try all of it offline with fake models first (`orch demo`).
+
 ## What it does
 
 - **Routes work to the cheapest model that can do it.** Each task type and difficulty has an ordered list of
@@ -15,6 +31,8 @@ Python 3.11+, standard library only. Built and used on Windows. A full guide in 
   ones on Codex or Claude.
 - **Trusts tests, not the model.** A task is done when its acceptance commands exit with 0, and the project's
   baseline tests still pass after the merge. Escalation happens only on objective failures.
+- **Leaves stuck models early.** When a run changes no files, or acceptance fails with exactly the same error as
+  the previous run, the task moves to the next model at once instead of using up its remaining attempts.
 - **Survives failures.** Every task runs in its own git worktree and branch, with a checkpoint commit after each
   run. Crashes, rate limits and Ctrl+C trip a circuit breaker; the next model takes over from a deterministic
   `HANDOFF.md`, never from another vendor's chat transcript.
@@ -131,6 +149,9 @@ Tools: `orch_list_projects`, `orch_list_tasks`, `orch_task`, `orch_add_task`, `o
 
 ## Changelog
 
+- **0.3.4**: early escalation: a run that changes nothing, or fails acceptance exactly like the previous run, moves
+  the task to the next model straight away (`[escalation] early_escalation`, on by default). README lists what you
+  can do today.
 - **0.3.2**: `orch key` and `orch connect`: use your own DeepSeek, GPT, Claude, Qwen, Gemini and Doubao
   accounts from the command line (keys encrypted on Windows); step-by-step getting started.
 - **0.3.1**: MCP server (`orch mcp`) to list, add, run and follow tasks from chat apps such as Claude Desktop;

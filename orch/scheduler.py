@@ -1,9 +1,11 @@
 """The deterministic orchestrator loop. No LLM makes control decisions here."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import queue
+import re
 import threading
 import time
 import traceback
@@ -60,6 +62,15 @@ def review_needed(task: Task, cfg: dict) -> tuple[bool, str]:
     if not task.verify and cfg.get("when_no_verify", True):
         return True, "no acceptance commands"
     return False, f"risk={task.risk} with acceptance commands"
+
+
+def failure_fingerprint(log: str) -> str:
+    """Identify a failing acceptance run, ignoring what changes between identical failures (timings, addresses)."""
+    text = re.sub(r"\[exit (\S+) in [\d.]+s\]", r"[exit \1]", log)
+    text = re.sub(r"\b\d+(?:\.\d+)?\s*(?:s|ms|sec|seconds)\b", "#s", text)
+    text = re.sub(r"0x[0-9a-fA-F]+", "0x#", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return hashlib.sha1(text.encode("utf-8", errors="replace")).hexdigest()
 
 
 def scopes_conflict(a: Task, b: Task) -> bool:
@@ -336,6 +347,8 @@ class Orchestrator:
         review_fix = bool(last and all_runs[-1].kind == "review" and all_runs[-1].verified is False)
         last_verify_log = ""
         threshold = int(self.cfg.esc.get("verify_failures", 2))
+        early_on = bool(self.cfg.esc.get("early_escalation", True))
+        prev_failure: tuple[str, str] | None = None   # (pool, fingerprint) of the previous failed acceptance
         # task.runs_count only counts runs where an agent actually worked. Infrastructure
         # failures (crash / rate limit / auth) are bounded by the breakers instead, plus
         # this safety cap so a misconfiguration can never loop forever.
@@ -487,7 +500,19 @@ class Orchestrator:
             task.verify_failures += 1
             self.say(f"[{task.id}] 验收未通过（{pool} 连续第 {task.verify_failures} 次）"
                      + (f"；agent 报告 BLOCKED: {blocked}" if blocked else ""))
-            if blocked or task.verify_failures >= threshold:
+            # Early escalation: do not spend the remaining attempts on a pool that is clearly stuck.
+            fp = failure_fingerprint(log)
+            early = None
+            if early_on and not blocked and task.verify_failures < threshold:
+                if sha is None:
+                    early = ("no files changed", "这次运行没有改动任何文件")
+                elif prev_failure == (pool, fp):
+                    early = ("same failure as the previous run", "验收报错和上一次完全一样")
+            prev_failure = (pool, fp)
+            if early:
+                self.say(f"[{task.id}] 提前升级：{early[1]}")
+                self.store.log("early_escalate", f"{pool}: {early[0]}", task_id=task.id, run_id=run.id)
+            if blocked or early or task.verify_failures >= threshold:
                 task.ladder = idx + 1
                 task.verify_failures = 0
                 nxt = route[task.ladder] if task.ladder < len(route) else "（无）"

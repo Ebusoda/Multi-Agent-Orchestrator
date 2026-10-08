@@ -127,7 +127,7 @@ skip_risk = []
 require_risk = ["low", "normal", "high", "critical"]   # 演示：每个任务都审
 
 [routing]
-demo_lazy = ["fake_lazy", "fake_good"]     # 先给“偷懒”的执行者，验收失败两次后升级
+demo_lazy = ["fake_lazy", "fake_good"]     # 先给“偷懒”的执行者：没改任何文件、验收失败，提前升级
 demo_flaky = ["fake_flaky", "fake_good"]   # 先给会被限流的执行者，熔断后交接
 default = ["fake_good"]
 
