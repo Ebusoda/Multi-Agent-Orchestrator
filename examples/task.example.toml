@@ -1,0 +1,18 @@
+# 用法: python -m orch -p <项目目录> task add -f examples/task.example.toml
+# 字符串里的 Windows 路径请用正斜杠，或用单引号 '...'（TOML 双引号里的反斜杠是转义符）。
+
+title = "导出功能支持 CSV"
+type = "code_change"        # 决定走 [routing] 里的哪条规则
+difficulty = "M"            # S / M / L
+risk = "normal"             # low / normal / high / critical（v0.1 只记录，不参与路由）
+spec = """
+在 src/export.py 里新增 export_csv(rows, path)。
+- 第一行是表头
+- 使用 UTF-8 BOM，方便 Excel 打开
+"""
+scope = ["src/export.py", "tests/test_export.py"]
+verify = [
+  "python -m pytest -q tests/test_export.py",
+]
+depends_on = []
+max_runs = 4

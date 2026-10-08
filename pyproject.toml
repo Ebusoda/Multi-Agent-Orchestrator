@@ -1,0 +1,17 @@
+[project]
+name = "mao-orch"
+version = "0.3.2"
+description = "MAO: deterministic orchestrator for multiple coding-agent CLIs (Claude Code, Codex, opencode)"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }   # PolyForm Noncommercial 1.0.0
+dependencies = []          # stdlib only on purpose
+
+[project.scripts]
+orch = "orch.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["orch*"]   # maoweb is added when the web app is published

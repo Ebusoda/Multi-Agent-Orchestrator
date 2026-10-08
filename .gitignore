@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.egg-info/
+# orch demo 和 probe 生成的仓库（各自是独立的 git 仓库）
+playground/
+probe/
+# 网页版的数据（账号、对话、加密的 API key），只在本机
+.maoweb/
+.env
+*.key
+gpt_reports/
