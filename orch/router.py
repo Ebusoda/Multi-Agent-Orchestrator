@@ -12,6 +12,7 @@ from .adapters import Adapter, make_adapter
 from .config import Config
 from .models import OPEN_IMMEDIATELY, RunStatus, Task
 from .store import Store
+from .i18n import tr
 
 
 class Breakers:
@@ -62,7 +63,10 @@ class Router:
         self.breakers = breakers
 
     def route(self, task: Task) -> list[str]:
-        return self.cfg.route_for(task.type, task.difficulty)
+        route = self.cfg.route_for(task.type, task.difficulty)
+        if task.pin:  # chosen by hand (`orch agents swap`): first, then the normal route
+            return [task.pin] + [p for p in route if p != task.pin]
+        return route
 
     def quota_reserved(self, pool: str, task: Task) -> bool:
         """Keep the last `reserve` share of a subscription window for critical tasks.
@@ -115,8 +119,8 @@ class Router:
                 continue
             if projected <= hard and important:
                 continue
-            who = "只放行 L 级或高风险任务" if projected <= hard else "只放行 critical 任务"
-            self.store.log("pacing", f"{pool} {name}: 按当前速度重置时约用到 {projected:.0%}，{who}",
+            who = tr("只放行 L 级或高风险任务") if projected <= hard else tr("只放行 critical 任务")
+            self.store.log("pacing", tr("{0} {1}: 按当前速度重置时约用到 {2:.0%}，{3}", pool, name, projected, who),
                            task_id=task.id)
             return True
         return False

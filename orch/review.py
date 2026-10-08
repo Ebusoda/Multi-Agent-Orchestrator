@@ -16,6 +16,7 @@ from . import workspace as ws
 from .adapters import RunContext
 from .models import INFRA_FAILURES, RunStatus, Task
 from .plan import PlanError, _finish_run
+from .i18n import tr
 
 REVIEW_INSTRUCTION = (
     "Read the file .task/REVIEW_PROMPT.md in the current directory and carry out the review it "
@@ -165,7 +166,7 @@ def run_review(orch, task: Task, wt: Path, author_pool: str, author_vendor: str)
             raise KeyboardInterrupt
         if result.status in INFRA_FAILURES or result.status == RunStatus.TIMEOUT:
             orch.breakers.record_failure(pool, result.status, result.resets_at)
-            orch.say(f"[{task.id}] 审查者 {pool} 失败（{result.status.value}），换下一个")
+            orch.say(tr("[{0}] 审查者 {1} 失败（{2}），换下一个", task.id, pool, result.status.value))
             continue
         orch.breakers.record_success(pool)
         try:
@@ -202,7 +203,7 @@ def _review_run(orch, task: Task, wt: Path, pool: str, adapter, author_pool: str
         run.pid = pid
         orch.store.save_run(run)
 
-    orch.say(f"[{task.id}] {run.id} -> {pool} ({adapter.vendor}) 只读审查 {author_pool} 的改动...")
+    orch.say(tr("[{0}] {1} -> {2} ({3}) 只读审查 {4} 的改动...", task.id, run.id, pool, adapter.vendor, author_pool))
     ctx = RunContext(task=task, worktree=wt, events_path=events,
                      timeout_s=orch._minutes("run_timeout_minutes", 45),
                      model=adapter.model, readonly=True, instruction=REVIEW_INSTRUCTION,

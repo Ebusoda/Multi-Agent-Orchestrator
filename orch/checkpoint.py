@@ -18,91 +18,90 @@ from . import memory
 from . import workspace as ws
 from .models import TaskStatus
 from .report import build_report
+from .i18n import tr
 
 CHECKPOINT_FILE = "CHECKPOINT.md"
 _KEEP = ("goal", "constraint", "architecture", "knowledge", "rejected")
 
 
 def render(orch) -> str:
-    out = [f"# 项目交接（Checkpoint）：{orch.project.name}", "",
-           f"由 `orch handoff export` 确定性生成（不调用模型），{time.strftime('%Y-%m-%d')}。"
-           "新会话先读这个文件，需要细节再打开下面提到的文件。", ""]
+    out = [tr("# 项目交接（Checkpoint）：{0}", orch.project.name), "",
+           tr("由 `orch handoff export` 确定性生成（不调用模型），{0}。新会话先读这个文件，需要细节再打开下面提到的文件。", time.strftime('%Y-%m-%d')), ""]
 
     entries = memory.load(orch)
-    out.append("## 项目记忆（docs/project/）")
+    out.append(tr("## 项目记忆（docs/project/）"))
     if not entries:
-        out.append("- 还没有项目记忆：运行 `orch memory init`，再填写目标、约束、架构。")
-    titles = {"goal": "目标", "constraint": "约束", "architecture": "架构", "knowledge": "长期知识",
-              "rejected": "放弃过的方案"}
+        out.append(tr("- 还没有项目记忆：运行 `orch memory init`，再填写目标、约束、架构。"))
+    titles = {"goal": tr("目标"), "constraint": tr("约束"), "architecture": tr("架构"), "knowledge": tr("长期知识"),
+              "rejected": tr("放弃过的方案")}
     for kind in _KEEP:
         lines = [e.text for e in entries if e.kind == kind]
         if lines:
-            out.append(f"- {titles[kind]}：" + "；".join(lines))
+            out.append(tr("- {0}：", titles[kind]) + tr("；").join(lines))
     n_cand = sum(1 for e in entries if e.kind == "candidate")
     if n_cand:
-        out.append(f"- 待确认的候选 {n_cand} 条：见 docs/project/MEMORY.md")
+        out.append(tr("- 待确认的候选 {0} 条：见 docs/project/MEMORY.md", n_cand))
     out.append("")
 
     tasks = orch.store.list_tasks()
     counts: dict[str, int] = {}
     for t in tasks:
         counts[t.status.value] = counts.get(t.status.value, 0) + 1
-    out.append("## 任务")
-    out.append("- " + ("，".join(f"{k} {v}" for k, v in sorted(counts.items())) if counts else "还没有任务"))
+    out.append(tr("## 任务"))
+    out.append("- " + (tr("，").join(f"{k} {v}" for k, v in sorted(counts.items())) if counts else tr("还没有任务")))
     for t in tasks:
         if t.status not in (TaskStatus.MERGED, TaskStatus.CANCELLED):
-            note = f"：{t.note[:160]}" if t.note else ""
+            note = tr("：{0}", t.note[:160]) if t.note else ""
             out.append(f"- {t.id} [{t.status.value}] {t.title}{note}")
     out.append("")
 
     waiting = []
     for t in tasks:
         if t.status in (TaskStatus.BLOCKED, TaskStatus.FAILED):
-            what = "被卡住" if t.status == TaskStatus.BLOCKED else "失败了"
-            waiting.append(f"- {t.id} {what}，需要你处理（`orch task show {t.id}`，之后 `orch task retry {t.id}`）")
+            what = tr("被卡住") if t.status == TaskStatus.BLOCKED else tr("失败了")
+            waiting.append(tr("- {0} {1}，需要你处理（`orch task show {2}`，之后 `orch task retry {3}`）", t.id, what, t.id, t.id))
         elif t.status == TaskStatus.VERIFIED:
-            waiting.append(f"- {t.id} 已验收，等合并（`orch merge {t.id}`）")
+            waiting.append(tr("- {0} 已验收，等合并（`orch merge {1}`）", t.id, t.id))
     for p in orch.store.list_plans():
         if p["status"] == "draft":
-            waiting.append(f"- 计划 {p['id']} 等批准（`orch plan approve {p['id']}`）：{p['goal'][:80]}")
+            waiting.append(tr("- 计划 {0} 等批准（`orch plan approve {1}`）：{2}", p['id'], p['id'], p['goal'][:80]))
     for d in orch.store.list_decisions():
         if d["status"] == "proposed":
-            waiting.append(f"- 决策 {d['id']} 等拍板（`orch decide accept|reject {d['id']}`）：{(d['title'] or '')[:80]}")
-    out.append("## 等你处理")
-    out += waiting or ["- 没有"]
+            waiting.append(tr("- 决策 {0} 等拍板（`orch decide accept|reject {1}`）：{2}", d['id'], d['id'], (d['title'] or '')[:80]))
+    out.append(tr("## 等你处理"))
+    out += waiting or [tr("- 没有")]
     out.append("")
 
-    out.append("## 最近合并（integration 分支）")
+    out.append(tr("## 最近合并（integration 分支）"))
     # the checkpoint's own commits are left out, or every export would change the next one
     log = ws.git(["log", "--format=%h %s", "-10", "--invert-grep", "--grep=^docs: project checkpoint",
                   orch.integration_branch], orch.project, check=False)
-    out += [f"- {line}" for line in log.splitlines()] or ["- 没有"]
+    out += [f"- {line}" for line in log.splitlines()] or [tr("- 没有")]
     out.append("")
 
-    out.append("## 路由与池")
+    out.append(tr("## 路由与池"))
     for key, val in orch.cfg.data.get("routing", {}).items():
         if isinstance(val, dict):
             out += [f"- {key}.{d}: {' -> '.join(v)}" for d, v in val.items()]
         else:
             out.append(f"- {key}: {' -> '.join(val)}")
     for name, pcfg in orch.cfg.pools.items():
-        billing = "API" if orch.is_api_pool(name) else "订阅"
-        out.append(f"- 池 {name}: {pcfg.get('executor', '?')} {pcfg.get('model') or ''}（{billing}）".replace("  ", " "))
+        billing = "API" if orch.is_api_pool(name) else tr("订阅")
+        out.append(tr("- 池 {0}: {1} {2}（{3}）", name, pcfg.get('executor', '?'), pcfg.get('model') or '', billing).replace("  ", " "))
     out.append("")
 
     executors = {p: str(c.get("executor", "")) for p, c in orch.cfg.pools.items()}
     rep = build_report(orch.store, orch.cfg.agents_dir, executors)
-    out.append("## 执行统计（orch report）")
+    out.append(tr("## 执行统计（orch report）"))
     if not rep["groups"]:
-        out.append("- 还没有运行记录")
+        out.append(tr("- 还没有运行记录"))
     for g in rep["groups"]:
         usd = f"${g['usd_per_success']:.4f}" if g["usd_per_success"] is not None else "-"
-        out.append(f"- {g['type']} × {g['pool']}：{g['tasks']} 个任务，成功 {g['success']}，首次通过 "
-                   f"{g['first_pass']}，每个成功任务 {usd}{'（含估算）' if g['estimated_usd'] else ''}")
+        out.append(tr("- {0} × {1}：{2} 个任务，成功 {3}，首次通过 {4}，每个成功任务 {5}{6}", g['type'], g['pool'], g['tasks'], g['success'], g['first_pass'], usd, tr('（含估算）') if g['estimated_usd'] else ''))
     out.append("")
-    out += ["## 怎么继续",
-            "- `orch status` 看现状；`orch task show ID` 看单个任务；`orch context ID` 看某次调用注入了什么",
-            "- 项目历史在 git 和 .agents/ 里，不要把整段历史贴给模型；按上面的指针打开需要的文件"]
+    out += [tr("## 怎么继续"),
+            tr("- `orch status` 看现状；`orch task show ID` 看单个任务；`orch context ID` 看某次调用注入了什么"),
+            tr("- 项目历史在 git 和 .agents/ 里，不要把整段历史贴给模型；按上面的指针打开需要的文件")]
     return "\n".join(out) + "\n"
 
 

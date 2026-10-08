@@ -22,6 +22,7 @@ from typing import Any
 
 from .models import Run, TaskStatus
 from .store import Store
+from .i18n import tr
 
 ESTIMATED_COST_EXECUTORS = {"claude_code"}  # dollars come from the CLI's own estimate
 _SUCCESS = {TaskStatus.VERIFIED, TaskStatus.MERGED}
@@ -39,7 +40,7 @@ def parse_since(text: str | None, now: float | None = None) -> float | None:
     try:
         return time.mktime(time.strptime(text, "%Y-%m-%d"))
     except ValueError:
-        raise ValueError(f"--since 需要 7d 或 2026-10-01 这样的格式，收到 {text!r}") from None
+        raise ValueError(tr("--since 需要 7d 或 2026-10-01 这样的格式，收到 {0!r}", text)) from None
 
 
 def _secs(r: Run) -> float:
@@ -224,46 +225,46 @@ def format_report(rep: dict[str, Any]) -> str:
     out: list[str] = []
     scope = []
     if rep["since"]:
-        scope.append("自 " + time.strftime("%Y-%m-%d %H:%M", time.localtime(rep["since"])))
+        scope.append(tr("自 ") + time.strftime("%Y-%m-%d %H:%M", time.localtime(rep["since"])))
     if rep["type"]:
-        scope.append(f"类型 {rep['type']}")
-    out.append("== 执行记录报表 ==" + (f"（{'，'.join(scope)}）" if scope else ""))
+        scope.append(tr("类型 {0}", rep['type']))
+    out.append(tr("== 执行记录报表 ==") + (tr("（{0}）", '，'.join(scope)) if scope else ""))
     if not rep["tasks"] and not rep["roles"]:
-        out.append("（还没有运行记录）")
+        out.append(tr("（还没有运行记录）"))
         return "\n".join(out) + "\n"
 
-    out += ["", "== 任务类型 × 池（任务记在最后一次执行它的池上）=="]
+    out += ["", tr("== 任务类型 × 池（任务记在最后一次执行它的池上）==")]
     out += _table(
-        ["类型", "池", "任务", "成功", "首次通过", "每个成功任务的成本", "token/成功", "耗时/成功", "升级", "审查拦下"],
+        [tr("类型"), tr("池"), tr("任务"), tr("成功"), tr("首次通过"), tr("每个成功任务的成本"), tr("token/成功"), tr("耗时/成功"), tr("升级"), tr("审查拦下")],
         [[g["type"], g["pool"], str(g["tasks"]), str(g["success"]),
           f"{g['first_pass']}/{g['tasks']}", _usd(g["usd_per_success"], g["estimated_usd"]),
           _tok(g["tokens_per_success"]),
           f"{g['seconds_per_success']:.0f}s" if g["seconds_per_success"] is not None else "-",
           str(g["escalations"]), str(g["review_issues"])] for g in rep["groups"]])
 
-    out += ["", "== 池 × 角色 =="]
-    out += _table(["池", "角色", "次数", "费用", "输入 token", "其中缓存", "未缓存/次", "轮数/次", "输出 token", "耗时",
-                   "orch 注入/次"],
+    out += ["", tr("== 池 × 角色 ==")]
+    out += _table([tr("池"), tr("角色"), tr("次数"), tr("费用"), tr("输入 token"), tr("其中缓存"), tr("未缓存/次"), tr("轮数/次"), tr("输出 token"), tr("耗时"),
+                   tr("orch 注入/次")],
                   [[r["pool"], r["role"], str(r["runs"]), _usd(r["usd"], r["estimated_usd"]),
                     _tok(r["tokens_in"]), _tok(r["tokens_cached"]), _tok(r["uncached_avg"]),
                     str(r["calls_avg"]) if r["calls_avg"] is not None else "-",
                     _tok(r["tokens_out"]), f"{r['seconds']:.0f}s", _tok(r["context_avg"])] for r in rep["roles"]])
 
     if rep["plans_and_decisions"]:
-        out += ["", "== 规划与决策（规划成本已平摊进它建出的任务）=="]
-        out += _table(["id", "次数", "费用", "输入 token", "耗时"],
+        out += ["", tr("== 规划与决策（规划成本已平摊进它建出的任务）==")]
+        out += _table(["id", tr("次数"), tr("费用"), tr("输入 token"), tr("耗时")],
                       [[o["id"], str(o["runs"]), _usd(o["usd"], o["estimated_usd"]), _tok(o["tokens_in"]),
                         f"{o['seconds']:.0f}s"] for o in rep["plans_and_decisions"]])
 
-    out += ["", "== 任务明细 =="]
-    out += _table(["任务", "状态", "池", "尝试", "首次通过", "审查退回", "成本", "token"],
+    out += ["", tr("== 任务明细 ==")]
+    out += _table([tr("任务"), tr("状态"), tr("池"), tr("尝试"), tr("首次通过"), tr("审查退回"), tr("成本"), "token"],
                   [[t["id"], t["status"], t["pool"], " ".join(f"{p}×{n}" for p, n in t["attempts"].items()),
-                    "是" if t["first_pass"] else "否", str(t["sent_back"]), _usd(t["cost"]["usd"], t["cost"]["estimated_usd"]),
+                    tr("是") if t["first_pass"] else tr("否"), str(t["sent_back"]), _usd(t["cost"]["usd"], t["cost"]["estimated_usd"]),
                     _tok(t["cost"]["tokens_in"] + t["cost"]["tokens_out"])] for t in rep["tasks"]])
-    out += ["", "输入 token 是一次运行里所有模型调用的输入之和（每一轮都会重新发送整段对话），其中缓存命中的部分便宜得多；",
-            "未缓存/次才是真正新增的量。轮数/次 = 每次运行的模型调用次数，省 token 主要靠减少轮数。",
-            "orch 注入/次：Context Manager 记录的每次运行注入量（V2-1 之后才有）。`orch context <id>` 看单次明细。",
-            "说明：≈ 表示 CLI 自己估算的等价美元（订阅额度并不按此扣费）；Codex 不报告美元，只列 token。"]
+    out += ["", tr("输入 token 是一次运行里所有模型调用的输入之和（每一轮都会重新发送整段对话），其中缓存命中的部分便宜得多；"),
+            tr("未缓存/次才是真正新增的量。轮数/次 = 每次运行的模型调用次数，省 token 主要靠减少轮数。"),
+            tr("orch 注入/次：Context Manager 记录的每次运行注入量（V2-1 之后才有）。`orch context <id>` 看单次明细。"),
+            tr("说明：≈ 表示 CLI 自己估算的等价美元（订阅额度并不按此扣费）；Codex 不报告美元，只列 token。")]
     return "\n".join(out) + "\n"
 
 

@@ -17,6 +17,7 @@ from typing import Any
 from . import workspace as ws
 from .adapters import RunContext
 from .models import INFRA_FAILURES, RunStatus, Task
+from .i18n import tr
 
 DIFFICULTIES = ("S", "M", "L")
 RISKS = ("low", "normal", "high", "critical")
@@ -251,22 +252,22 @@ def lint(plan: Plan) -> list[str]:
 
 
 def render(plan_id: str, goal: str, plan: Plan, status: str) -> str:
-    lines = [f"# {plan_id}  [{status}]", "", f"目标: {goal.strip()}", ""]
+    lines = [f"# {plan_id}  [{status}]", "", tr("目标: {0}", goal.strip()), ""]
     if plan.summary:
-        lines += [f"概要: {plan.summary}", ""]
+        lines += [tr("概要: {0}", plan.summary), ""]
     for n, t in enumerate(plan.tasks, 1):
-        deps = f"  依赖: {', '.join(t['depends_on'])}" if t["depends_on"] else ""
+        deps = tr("  依赖: {0}", ', '.join(t['depends_on'])) if t["depends_on"] else ""
         lines.append(f"{n}. [{t['key']}] {t['title']}  ({t['type']}/{t['difficulty']}, risk={t['risk']}){deps}")
         if t["spec"]:
             for s in t["spec"].splitlines():
                 lines.append(f"     {s}")
         if t["scope"]:
-            lines.append(f"     范围: {', '.join(t['scope'])}")
+            lines.append(tr("     范围: {0}", ', '.join(t['scope'])))
         for v in t["verify"]:
-            lines.append(f"     验收: {v}")
+            lines.append(tr("     验收: {0}", v))
         lines.append("")
     if plan.warnings:
-        lines.append("提醒:")
+        lines.append(tr("提醒:"))
         lines += [f"  - {w}" for w in plan.warnings]
     return "\n".join(lines).rstrip() + "\n"
 
@@ -306,7 +307,7 @@ def run_planner(orch, goal: str, context: str = "", pool: str | None = None) -> 
         run = store.create_run(plan_id, pool_name, adapter.executor, resumed=False, kind="plan")
         events = plan_dir / plan_id / f"{run.id}.jsonl"
         run.events_path = str(events)
-        orch.say(f"[{plan_id}] {run.id} -> {pool_name} ({adapter.executor}), 只读规划中...")
+        orch.say(tr("[{0}] {1} -> {2} ({3}), 只读规划中...", plan_id, run.id, pool_name, adapter.executor))
         ctx = RunContext(task=pseudo, worktree=wt, events_path=events,
                          timeout_s=orch._minutes("run_timeout_minutes", 45),
                          model=adapter.model, readonly=True)
@@ -315,7 +316,7 @@ def run_planner(orch, goal: str, context: str = "", pool: str | None = None) -> 
         if result.status in INFRA_FAILURES or result.status == RunStatus.TIMEOUT:
             orch.breakers.record_failure(pool_name, result.status, result.resets_at)
             last_error = f"{pool_name}: {result.status.value} {result.error[-300:]}"
-            orch.say(f"[{plan_id}] {pool_name} 失败（{result.status.value}），换下一个")
+            orch.say(tr("[{0}] {1} 失败（{2}），换下一个", plan_id, pool_name, result.status.value))
             continue
         orch.breakers.record_success(pool_name)
         try:
@@ -324,7 +325,7 @@ def run_planner(orch, goal: str, context: str = "", pool: str | None = None) -> 
             last_error = str(e)
             if not (result.session_id and adapter.supports_resume()):
                 break
-            orch.say(f"[{plan_id}] 计划不合格（{e}），让它改一次")
+            orch.say(tr("[{0}] 计划不合格（{1}），让它改一次", plan_id, e))
             (task_dir / "PROMPT.md").write_text(fix_prompt(str(e)), encoding="utf-8")
             run2 = store.create_run(plan_id, pool_name, adapter.executor, resumed=True, kind="plan")
             run2.events_path = str(plan_dir / plan_id / f"{run2.id}.jsonl")

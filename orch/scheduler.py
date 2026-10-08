@@ -25,6 +25,7 @@ from .proc import STOP, Slots, kill_tree, pid_alive
 from .router import Breakers, Router
 from .store import Store
 from .verify import run_verify
+from .i18n import tr
 
 
 class OrchError(RuntimeError):
@@ -88,24 +89,24 @@ def init_project(project: Path) -> list[str]:
     """Create .agents/, config, DB, git excludes and the integration branch."""
     project = project.resolve()
     if not ws.is_repo(project):
-        raise OrchError(f"{project} 不是 git 仓库。先运行: git init && git add -A && git commit -m init")
+        raise OrchError(tr("{0} 不是 git 仓库。先运行: git init && git add -A && git commit -m init", project))
     if not ws.has_commits(project):
-        raise OrchError("仓库还没有任何提交。先提交一次（git add -A && git commit -m init）。")
+        raise OrchError(tr("仓库还没有任何提交。先提交一次（git add -A && git commit -m init）。"))
     msgs = []
     agents = project / ".agents"
     agents.mkdir(exist_ok=True)
     cfg_path = agents / "orch.toml"
     if not cfg_path.exists():
         cfg_path.write_text(DEFAULT_CONFIG_TOML, encoding="utf-8")
-        msgs.append(f"写入配置 {cfg_path}")
+        msgs.append(tr("写入配置 {0}", cfg_path))
     cfg = Config.load(project)
     Store(agents / "state.db").close()
     ws.setup_excludes(project)
     base = cfg.data["project"].get("base_branch") or ws.current_branch(project)
     integ = cfg.data["project"]["integration_branch"]
     ws.ensure_branch(project, integ, base)
-    msgs.append(f"integration 分支: {integ}（起点 {base}）")
-    msgs.append(f"worktree 目录: {cfg.worktrees_dir}")
+    msgs.append(tr("integration 分支: {0}（起点 {1}）", integ, base))
+    msgs.append(tr("worktree 目录: {0}", cfg.worktrees_dir))
     return msgs
 
 
@@ -114,7 +115,7 @@ class Orchestrator:
                  slots: Slots | None = None, git_lock: threading.RLock | None = None):
         self.project = project.resolve()
         if not (self.project / ".agents").is_dir():
-            raise OrchError(f"{self.project} 还没有初始化。先运行: orch init")
+            raise OrchError(tr("{0} 还没有初始化。先运行: orch init", self.project))
         self.cfg = Config.load(self.project)
         self.store = Store(self.cfg.agents_dir / "state.db")  # one SQLite connection per thread
         self.breakers = Breakers(self.store, self.cfg)
@@ -141,7 +142,7 @@ class Orchestrator:
         """Take a run slot on `pool` (waits if it is busy). False = the pool's breaker opened
         while waiting; pick again. On Ctrl+C while waiting the task goes back to the queue."""
         def on_wait() -> None:
-            self.say(f"[{task.id}] 等待 {pool} 空出来（同时最多 {self.slots.limit(pool)} 个）")
+            self.say(tr("[{0}] 等待 {1} 空出来（同时最多 {2} 个）", task.id, pool, self.slots.limit(pool)))
 
         try:
             waited = self.slots.acquire(pool, on_wait)
@@ -163,7 +164,7 @@ class Orchestrator:
             except ValueError:
                 other = 0
             if other and other != os.getpid() and pid_alive(other):
-                raise OrchError(f"另一个 orch 进程（pid {other}）正在运行这个项目。")
+                raise OrchError(tr("另一个 orch 进程（pid {0}）正在运行这个项目。", other))
         path.write_text(str(os.getpid()))
         try:
             yield
@@ -178,7 +179,7 @@ class Orchestrator:
         """Runs left 'running' by a dead orchestrator become INTERRUPTED -> handoff path."""
         for run in self.store.running_runs():
             if pid_alive(run.pid):
-                self.say(f"! {run.id} 的进程 {run.pid} 还活着但已无人管理，正在停止它")
+                self.say(tr("! {0} 的进程 {1} 还活着但已无人管理，正在停止它", run.id, run.pid))
                 kill_tree(int(run.pid))  # type: ignore[arg-type]
             run.status = RunStatus.INTERRUPTED
             run.ended_at = run.ended_at or time.time()
@@ -227,9 +228,9 @@ class Orchestrator:
             waiting = [t for t in self.store.list_tasks([TaskStatus.QUEUED]) if t.id not in attempted]
             if waiting:
                 ids = ", ".join(t.id for t in waiting)
-                self.say(f"仍在排队（依赖未合并）: {ids}")
+                self.say(tr("仍在排队（依赖未合并）: {0}", ids))
             if done == 0 and not waiting:
-                self.say("没有可运行的任务。")
+                self.say(tr("没有可运行的任务。"))
             else:
                 checkpoint.refresh(self)
 
@@ -251,7 +252,7 @@ class Orchestrator:
             launched = 0
             seen_version = -1
             changed = True
-            self.say(f"并行模式：最多同时 {jobs} 个任务")
+            self.say(tr("并行模式：最多同时 {0} 个任务", jobs))
             try:
                 while True:
                     while True:  # collect finished workers
@@ -293,15 +294,15 @@ class Orchestrator:
                         pass
             except KeyboardInterrupt:
                 STOP.set()
-                self.say("正在停止所有运行中的任务（每个都会先做 checkpoint）...")
+                self.say(tr("正在停止所有运行中的任务（每个都会先做 checkpoint）..."))
                 for th, _t in running.values():
                     th.join()
                 raise
             waiting = [t for t in self.store.list_tasks([TaskStatus.QUEUED]) if t.id not in attempted]
             if waiting:
-                self.say("仍在排队（依赖未合并）: " + ", ".join(t.id for t in waiting))
+                self.say(tr("仍在排队（依赖未合并）: ") + ", ".join(t.id for t in waiting))
             if launched == 0 and not waiting:
-                self.say("没有可运行的任务。")
+                self.say(tr("没有可运行的任务。"))
             else:
                 checkpoint.refresh(self)
 
@@ -336,7 +337,7 @@ class Orchestrator:
         # killed, power loss): commit it now so the next agent and the history both see it.
         sha = ws.checkpoint(wt, f"wip({task.id}): recovered uncommitted work")
         if sha:
-            self.say(f"[{task.id}] 发现上次未提交的修改，已补做 checkpoint {sha}")
+            self.say(tr("[{0}] 发现上次未提交的修改，已补做 checkpoint {1}", task.id, sha))
 
         all_runs = self.store.runs_for(task.id)
         runs = [r for r in all_runs if r.kind == "work"]
@@ -356,7 +357,7 @@ class Orchestrator:
 
         if last and last.verified is True and all_runs[-1].kind == "review" and all_runs[-1].verified is None:
             # The work already passed acceptance; only its review was cut short.
-            self.say(f"[{task.id}] 上次的审查没有完成，重新审查（不重做任务）")
+            self.say(tr("[{0}] 上次的审查没有完成，重新审查（不重做任务）", task.id))
             done = self._after_pass(task, wt, last.pool, self._vendor_of(last.pool))
             if done is not None:
                 return done
@@ -408,7 +409,7 @@ class Orchestrator:
                 ho.write_handoff(wt, ho.build_handoff(task, last, wt, integ, last_verify_log, reason))
 
             if rot and resume is None:
-                self.say(f"[{task.id}] 会话轮换：{rot}")
+                self.say(tr("[{0}] 会话轮换：{1}", task.id, rot))
                 self.store.log("session_rotated", rot, task_id=task.id, run_id=last.id if last else None)
             ho.write_task_files(wt, task, mode)
             manifest = ctxm.build(self, task, wt, mode)
@@ -490,7 +491,7 @@ class Orchestrator:
 
             if passed and not blocked:
                 task.verify_failures = 0
-                self.say(f"[{task.id}] 验收通过")
+                self.say(tr("[{0}] 验收通过", task.id))
                 done = self._after_pass(task, wt, pool, adapter.vendor)
                 if done is not None:
                     return done
@@ -498,25 +499,25 @@ class Orchestrator:
                 continue
 
             task.verify_failures += 1
-            self.say(f"[{task.id}] 验收未通过（{pool} 连续第 {task.verify_failures} 次）"
-                     + (f"；agent 报告 BLOCKED: {blocked}" if blocked else ""))
+            self.say(tr("[{0}] 验收未通过（{1} 连续第 {2} 次）", task.id, pool, task.verify_failures)
+                     + (tr("；agent 报告 BLOCKED: {0}", blocked) if blocked else ""))
             # Early escalation: do not spend the remaining attempts on a pool that is clearly stuck.
             fp = failure_fingerprint(log)
             early = None
             if early_on and not blocked and task.verify_failures < threshold:
                 if sha is None:
-                    early = ("no files changed", "这次运行没有改动任何文件")
+                    early = ("no files changed", tr("这次运行没有改动任何文件"))
                 elif prev_failure == (pool, fp):
-                    early = ("same failure as the previous run", "验收报错和上一次完全一样")
+                    early = ("same failure as the previous run", tr("验收报错和上一次完全一样"))
             prev_failure = (pool, fp)
             if early:
-                self.say(f"[{task.id}] 提前升级：{early[1]}")
+                self.say(tr("[{0}] 提前升级：{1}", task.id, early[1]))
                 self.store.log("early_escalate", f"{pool}: {early[0]}", task_id=task.id, run_id=run.id)
             if blocked or early or task.verify_failures >= threshold:
                 task.ladder = idx + 1
                 task.verify_failures = 0
-                nxt = route[task.ladder] if task.ladder < len(route) else "（无）"
-                self.say(f"[{task.id}] 升级: {pool} -> {nxt}")
+                nxt = route[task.ladder] if task.ladder < len(route) else tr("（无）")
+                self.say(tr("[{0}] 升级: {1} -> {2}", task.id, pool, nxt))
                 self.store.log("escalate", f"{pool} -> {nxt}", task_id=task.id, run_id=run.id)
             self.store.save_task(task)
 
@@ -545,7 +546,7 @@ class Orchestrator:
                     f"{self.task_dir(task.id) / 'REVIEW.md'}, then `orch task accept {task.id}` to merge "
                     f"anyway or `orch task retry {task.id}` for one more round",
                 )
-            self.say(f"[{task.id}] 审查退回（第 {task.review_rounds} 次），交给作者按 REVIEW.md 修改")
+            self.say(tr("[{0}] 审查退回（第 {1} 次），交给作者按 REVIEW.md 修改", task.id, task.review_rounds))
             self.store.save_task(task)
             return None
         notes = [] if task.verify else ["WARNING: no verify commands, accepted on the agent's word"]
@@ -559,7 +560,7 @@ class Orchestrator:
         if not need:
             return "skipped", f"review skipped ({why})"
         outcome, note = run_review(self, task, wt, author_pool, author_vendor)
-        labels = {"approved": "审查通过", "changes": "审查要求修改", "skipped": "审查跳过"}
+        labels = {"approved": tr("审查通过"), "changes": tr("审查要求修改"), "skipped": tr("审查跳过")}
         self.say(f"[{task.id}] {labels.get(outcome, outcome)}: {note}")
         self.store.log("review_" + outcome, note[:200], task_id=task.id)
         return outcome, note
@@ -613,7 +614,7 @@ class Orchestrator:
             ws.git([*ws.ident(wt), "commit", "--no-verify", "-q", "-m", f"merge {integ} into {task.branch}"],
                    wt, check=False)
             return True
-        self.say(f"[{task.id}] 合并冲突：{', '.join(files)}，交给 agent 解决")
+        self.say(tr("[{0}] 合并冲突：{1}，交给 agent 解决", task.id, ', '.join(files)))
         d = wt / ".task"
         d.mkdir(exist_ok=True)
         (d / "CONFLICTS.md").write_text("# Files with merge conflicts\n\n" + "\n".join(f"- `{f}`" for f in files) + "\n",
@@ -638,14 +639,14 @@ class Orchestrator:
                                    self._minutes("verify_timeout_minutes", 15))
             resolved = not left and passed
             if left:
-                self.say(f"[{task.id}] 冲突标记还在：{', '.join(left)}")
+                self.say(tr("[{0}] 冲突标记还在：{1}", task.id, ', '.join(left)))
         if resolved:
             with self.git_lock:
                 ws.git(["add", "-A"], wt)
                 ws.git([*ws.ident(wt), "commit", "--no-verify", "-q", "-m",
                         f"merge {integ} into {task.branch} (conflicts resolved by {pool})"], wt)
             self.store.log("conflict_resolved", f"{pool}: {', '.join(files)}", task_id=task.id)
-            self.say(f"[{task.id}] 冲突已由 {pool} 解决，验收通过")
+            self.say(tr("[{0}] 冲突已由 {1} 解决，验收通过", task.id, pool))
             return True
         with self.git_lock:
             ws.git(["merge", "--abort"], wt, check=False)
@@ -686,7 +687,7 @@ class Orchestrator:
         manual = self.cfg.data.get("approval", {}).get("manual_merge_risk", ["high", "critical"]) or []
         if task.risk not in manual:
             return True
-        self.say(f"[{task.id}] risk={task.risk}：需要你确认后再合并（orch merge {task.id}）")
+        self.say(tr("[{0}] risk={1}：需要你确认后再合并（orch merge {2}）", task.id, task.risk, task.id))
         self.store.log("awaiting_approval", f"risk={task.risk}; run orch merge {task.id}", task_id=task.id)
         return False
 
@@ -729,9 +730,9 @@ class Orchestrator:
     def merge(self, task_id: str, keep_worktree: bool = False) -> bool:
         task = self.store.get_task(task_id)
         if task is None:
-            raise OrchError(f"没有任务 {task_id}")
+            raise OrchError(tr("没有任务 {0}", task_id))
         if task.status != TaskStatus.VERIFIED:
-            raise OrchError(f"{task_id} 状态是 {task.status.value}，只有 verified 的任务可以合并")
+            raise OrchError(tr("{0} 状态是 {1}，只有 verified 的任务可以合并", task_id, task.status.value))
         integ = self.integration_branch
         with self.git_lock:
             integ_wt = ws.ensure_worktree(self.project, self.cfg.worktrees_dir / "_integration", integ, integ)
@@ -747,7 +748,7 @@ class Orchestrator:
             what = "merge conflict with integration branch" if conflict else "merge failed"
             task.note = f"{what}: " + detail[-500:]
             self.store.save_task(task)
-            self.say(f"[{task_id}] {'合并冲突' if conflict else '合并失败'}，已回滚。详情: {detail[-300:]}")
+            self.say(tr("[{0}] {1}，已回滚。详情: {2}", task_id, '合并冲突' if conflict else '合并失败', detail[-300:]))
             return False
         # the task's own acceptance, then the project-wide baseline (V2-5): another task's tests
         # must still pass after this one lands, or the merge is undone
@@ -764,7 +765,7 @@ class Orchestrator:
             task.note = (f"merged result failed {what} on the integration branch; merge undone "
                          f"(see {self.task_dir(task_id) / 'merge_verify.log'})")
             self.store.save_task(task)
-            self.say(f"[{task_id}] 合并后在 integration 分支验收失败，已撤销合并")
+            self.say(tr("[{0}] 合并后在 integration 分支验收失败，已撤销合并", task_id))
             return False
         task.status = TaskStatus.MERGED
         task.note = f"merged as {detail}"
@@ -774,11 +775,11 @@ class Orchestrator:
             with self.git_lock:
                 msha = memory.on_merge(self, task, detail)
             if msha:
-                self.say(f"[{task_id}] 项目记忆已更新（docs/project/，{msha}）")
+                self.say(tr("[{0}] 项目记忆已更新（docs/project/，{1}）", task_id, msha))
         except ws.GitError as e:  # memory is a convenience; never undo a good merge for it
             self.store.log("memory_error", str(e)[:300], task_id=task_id)
         if not keep_worktree:
             with self.git_lock:
                 ws.remove_worktree(self.project, Path(task.worktree))
-        self.say(f"[{task_id}] 已合并到 {integ}（{detail}）")
+        self.say(tr("[{0}] 已合并到 {1}（{2}）", task_id, integ, detail))
         return True

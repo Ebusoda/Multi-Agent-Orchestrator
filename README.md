@@ -21,6 +21,12 @@ Python 3.11+, standard library only. Built and used on Windows. A full guide in 
 - Run several tasks at once, each in its own git worktree, and merge them automatically or by hand.
 - See what every model cost and how often it passed first time (`orch report`), and exactly what each call was sent
   (`orch context`).
+- See every agent on one panel: what it is working on, what it used today and this week, its subscription
+  windows, recent success rate and last error; pause or resume an agent, or give a task to another one
+  (`orch agents`).
+- See the Claude Code and Codex sessions you open yourself on this computer, next to orch's own: project, model,
+  last use, whether one is in use now and its tokens (`orch sessions`). Only times, folders and token counts are
+  read from the CLIs' session logs; conversation content and sign-in files are never opened.
 - Hand the whole project to a new chat session with one generated file (`orch handoff export`).
 - Try all of it offline with fake models first (`orch demo`).
 
@@ -110,7 +116,10 @@ python -m orch -p path\to\repo report
 ```
 
 The result is merged into the `orch/integration` branch; your own checkout is never touched. Merge that branch
-into yours when you are happy with it. Command output is in Chinese for now.
+into yours when you are happy with it.
+
+**Language.** orch speaks Chinese, English or Japanese. It follows your system language; change it with
+`python -m orch lang en` (or `zh`, `ja`), or for one command with `--lang en`.
 
 ## Main commands
 
@@ -122,9 +131,12 @@ into yours when you are happy with it. Command output is in Chinese for now.
 | `decide "question"` | two proposals from different vendors, critiques, a judge, an ADR |
 | `context ID` / `context --title ...` | what a call was (or would be) given |
 | `memory init / show / commit` | versioned project memory |
+| `agents`, `agents pause / resume POOL`, `agents swap TASK POOL` | control panel: every agent's state and use; pause, resume, reassign |
+| `sessions [--days N] [--all]` | Claude Code / Codex sessions on this computer, hand-opened ones included (read-only) |
 | `report`, `route suggest / apply` | cost and quality per task type and pool; routing suggestions |
 | `handoff export` | a project checkpoint for a new chat session |
 | `key set / list / remove PROVIDER`, `connect [PROVIDER]` | your own model accounts |
+| `lang [zh/en/ja]` | language of orch's messages |
 | `mcp --project DIR` | MCP server for chat apps |
 | `api check POOL`, `usage rescan`, `status`, `merge`, `breaker` | maintenance |
 
@@ -139,7 +151,8 @@ an MCP client such as Claude Desktop (`claude_desktop_config.json`):
 ```
 
 Tools: `orch_list_projects`, `orch_list_tasks`, `orch_task`, `orch_add_task`, `orch_run` (background),
-`orch_report`, `orch_context`, `orch_merge`. The chat model asks; orch still decides routing, acceptance and merging.
+`orch_report`, `orch_context`, `orch_merge`, and the control panel: `orch_agents` (all projects at once),
+`orch_pause`, `orch_resume`, `orch_swap`, `orch_retry`, `orch_cancel`, `orch_sessions`. The chat model asks; orch still decides routing, acceptance and merging.
 
 ## Safety
 
@@ -149,6 +162,10 @@ Tools: `orch_list_projects`, `orch_list_tasks`, `orch_task`, `orch_add_task`, `o
 
 ## Changelog
 
+- **0.3.5**: `orch agents`, one panel for every agent: what it is doing, usage today and this week, subscription
+  quota, recent success rate and last error, with pause, resume and swap. `orch sessions` lists the Claude Code
+  and Codex sessions on this computer, including ones you opened yourself (read-only: times, folder and tokens only).
+  orch speaks Chinese, English and Japanese (`orch lang`, `--lang`, follows the system language).
 - **0.3.4**: early escalation: a run that changes nothing, or fails acceptance exactly like the previous run, moves
   the task to the next model straight away (`[escalation] early_escalation`, on by default). README lists what you
   can do today.

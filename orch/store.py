@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     scope TEXT, verify TEXT, depends_on TEXT, max_runs INTEGER, status TEXT,
     ladder INTEGER, verify_failures INTEGER, runs_count INTEGER,
     branch TEXT, worktree TEXT, note TEXT, created_at REAL, updated_at REAL, review_rounds INTEGER DEFAULT 0,
-    review TEXT DEFAULT 'auto'
+    review TEXT DEFAULT 'auto', pin TEXT DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS runs (
     id TEXT PRIMARY KEY, task_id TEXT, pool TEXT, executor TEXT, status TEXT,
@@ -82,6 +82,8 @@ class Store:
             self.db.execute("ALTER TABLE tasks ADD COLUMN review_rounds INTEGER DEFAULT 0")
         if "review" not in tcols:  # V2-3
             self.db.execute("ALTER TABLE tasks ADD COLUMN review TEXT DEFAULT 'auto'")
+        if "pin" not in tcols:  # agent panel
+            self.db.execute("ALTER TABLE tasks ADD COLUMN pin TEXT DEFAULT ''")
 
     def close(self) -> None:
         self.db.close()
@@ -134,7 +136,7 @@ class Store:
                 v = json.loads(v or "[]")
             elif f.name == "status":
                 v = TaskStatus(v)
-            elif v is None and f.name in ("note", "branch", "worktree", "spec"):
+            elif v is None and f.name in ("note", "branch", "worktree", "spec", "pin"):
                 v = ""
             elif v is None and f.name == "review_rounds":
                 v = 0

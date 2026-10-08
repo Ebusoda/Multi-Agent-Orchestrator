@@ -13,6 +13,7 @@ from pathlib import Path
 from . import workspace as ws
 from .models import Task, TaskStatus
 from .scheduler import Orchestrator, init_project
+from .i18n import tr
 
 CALC_BUGGY = '''\
 def add(a, b):
@@ -104,8 +105,7 @@ text = "I read TASK.md and the diff.\\n```json\\n" + json.dumps(verdict) + "\\n`
 print(json.dumps({"type": "result", "session_id": "rev-" + uuid.uuid4().hex[:6], "text": text}), flush=True)
 '''
 
-DEMO_CONFIG = """\
-# Demo 配置：三个假执行者 + 一个假审查者，不花任何额度。
+DEMO_CONFIG = """# Demo 配置：三个假执行者 + 一个假审查者，不花任何额度。
 [project]
 base_branch = ""
 integration_branch = "orch/integration"
@@ -157,7 +157,7 @@ def _unittest_cmd(target: str) -> str:
 def create_demo(root: Path, say=print) -> Path:
     root = root.resolve()
     if root.exists() and any(root.iterdir()):
-        raise SystemExit(f"{root} 已存在且不为空，请换一个目录或先删除它。")
+        raise SystemExit(tr("{0} 已存在且不为空，请换一个目录或先删除它。", root))
     root.mkdir(parents=True, exist_ok=True)
     (root / "calc.py").write_text(CALC_BUGGY, encoding="utf-8")
     (root / "test_calc.py").write_text(TEST_CALC, encoding="utf-8")
@@ -179,12 +179,12 @@ def create_demo(root: Path, say=print) -> Path:
 
     orch = Orchestrator(root, say=say)
     t1 = orch.store.add_task(Task(
-        id="", title="修复 add() 的 bug", type="demo_lazy", difficulty="S",
+        id="", title=tr("修复 add() 的 bug"), type="demo_lazy", difficulty="S",
         spec="calc.add(a, b) returns a - b. It must return a + b.",
         scope=["calc.py"], verify=[_unittest_cmd("test_calc.TestAdd")],
     ))
     orch.store.add_task(Task(
-        id="", title="实现 multiply()", type="demo_flaky", difficulty="S",
+        id="", title=tr("实现 multiply()"), type="demo_flaky", difficulty="S",
         spec="Add calc.multiply(a, b) returning a * b.",
         scope=["calc.py"], verify=[_unittest_cmd("test_calc.TestMultiply")],
         depends_on=[t1.id],
@@ -221,15 +221,15 @@ def run_probe(executor: str, model: str, base: Path, timeout_min: float, say=pri
         spec="Create a file named hello.txt in the repository root whose content is exactly: hello",
         scope=["hello.txt"], verify=[check],
     ))
-    say(f"probe 仓库: {root}")
-    say(f"正在用 {executor} 运行一个极小的任务（会消耗少量额度）...")
+    say(tr("probe 仓库: {0}", root))
+    say(tr("正在用 {0} 运行一个极小的任务（会消耗少量额度）...", executor))
     try:
         orch.run(only=[task.id], max_tasks=1)
     except KeyboardInterrupt:
-        say("已中断")
+        say(tr("已中断"))
     runs = orch.store.runs_for(task.id)
     if not runs:
-        say("没有产生任何运行记录（执行者不可用？先运行 orch doctor）")
+        say(tr("没有产生任何运行记录（执行者不可用？先运行 orch doctor）"))
         return 2
     run = runs[-1]
     types: collections.Counter[str] = collections.Counter()
@@ -243,7 +243,7 @@ def run_probe(executor: str, model: str, base: Path, timeout_min: float, say=pri
                 types["(non-json line)"] += 1
     final = orch.store.get_task(task.id)
     say("")
-    say("== probe 结果 ==")
+    say(tr("== probe 结果 =="))
     say(f"run status : {run.status.value}   exit code: {run.exit_code}")
     say(f"verified   : {run.verified}   task: {final.status.value if final else '?'}")
     say(f"session_id : {run.session_id}")
@@ -253,7 +253,7 @@ def run_probe(executor: str, model: str, base: Path, timeout_min: float, say=pri
     say(f"stderr file: {ev_path.with_suffix('.stderr.log')}")
     if run.error:
         say(f"error      : {run.error[-500:]}")
-    say("把 events / stderr 两个文件发给 Claude，可以据此修正适配器的解析。")
+    say(tr("把 events / stderr 两个文件发给 Claude，可以据此修正适配器的解析。"))
     orch.store.close()
     return 0 if final and final.status == TaskStatus.VERIFIED else 1
 
@@ -310,7 +310,7 @@ def create_handoff_test(root: Path) -> Path:
     """A repo with one medium task routed Claude -> Codex, for a real interrupt/handoff test."""
     root = root.resolve()
     if root.exists() and any(root.iterdir()):
-        raise SystemExit(f"{root} 已存在且不为空，请换一个目录或先删除它。")
+        raise SystemExit(tr("{0} 已存在且不为空，请换一个目录或先删除它。", root))
     root.mkdir(parents=True, exist_ok=True)
     (root / "textstats.py").write_text(TEXTSTATS_STUB, encoding="utf-8")
     (root / "test_textstats.py").write_text(TEST_TEXTSTATS, encoding="utf-8")
@@ -322,11 +322,11 @@ def create_handoff_test(root: Path) -> Path:
     init_project(root)
     cfg = root / ".agents" / "orch.toml"
     text = cfg.read_text(encoding="utf-8")
-    text = text.replace("[routing]\n", "[routing]\nhandoff_test = [\"claude_sub\", \"codex_sub\"]   # 交接测试：先 Claude，后 Codex\n", 1)
+    text = text.replace("[routing]\n", tr("[routing]\nhandoff_test = [\"claude_sub\", \"codex_sub\"]   # 交接测试：先 Claude，后 Codex\n"), 1)
     cfg.write_text(text, encoding="utf-8")
     orch = Orchestrator(root, say=lambda _m: None)
     orch.store.add_task(Task(
-        id="", title="实现 textstats.py", type="handoff_test", difficulty="M",
+        id="", title=tr("实现 textstats.py"), type="handoff_test", difficulty="M",
         spec="Implement every function in textstats.py (see the docstrings) so that all tests in "
              "test_textstats.py pass. Do not change the tests.",
         scope=["textstats.py"], verify=[f'"{sys.executable}" -m unittest test_textstats'],

@@ -14,6 +14,8 @@
 - 把一个大目标拆成任务，你批准后再执行（`orch plan`）；或者让两家模型各出方案、互相点评，裁判写决策记录（`orch decide`）。
 - 同时跑多个任务，每个都在自己的 git worktree 里，自动或手动合并。
 - 看每个模型花了多少钱、一次通过的比例（`orch report`），以及每次调用到底发了什么（`orch context`）。
+- 在一个面板上看所有 agent：正在做什么、今天和这周用了多少、订阅额度、最近成功率和最近一次出错；可以暂停、恢复某个 agent，或者把任务换给另一个（`orch agents`）。
+- 看到你在这台电脑上自己开的 Claude Code、Codex 会话，和 orch 派的活放在一起：哪个项目、什么模型、上次什么时候用、现在是不是在用、用了多少 token（`orch sessions`）。只从会话记录里读时间、文件夹和 token 数，不打开对话内容和登录文件。
 - 用一个自动生成的文件把整个项目交给新的聊天会话（`orch handoff export`）。
 - 先用假模型离线把这些都试一遍（`orch demo`）。
 
@@ -95,6 +97,8 @@ python -m orch -p 你的仓库 report
 
 结果会合并到 `orch/integration` 分支，你自己的工作目录不会被改动。满意了再把这个分支合并进你的分支。
 
+**语言**：orch 的提示有中文、英文、日文三种，默认跟随系统语言。用 `python -m orch lang zh`（或 `en`、`ja`）切换；只想这一次换，就加 `--lang en`。
+
 ## 常用命令
 
 | 命令 | 用途 |
@@ -105,8 +109,11 @@ python -m orch -p 你的仓库 report
 | `decide "问题"` | 两家各出方案、互相点评、裁判写决策记录 |
 | `context ID` / `context --title ...` | 某次调用实际给了（或将会给）模型什么 |
 | `memory init / show / commit` | 项目记忆 |
+| `agents`、`agents pause / resume 池名`、`agents swap 任务 池名` | 总控面板：每个 agent 的状态和用量；暂停、恢复、换人 |
+| `sessions [--days N] [--all]` | 本机的 Claude Code / Codex 会话，包括你手动开的（只读） |
 | `report`、`route suggest / apply` | 各类任务在各个池上的成本和质量；路由建议 |
 | `handoff export` | 生成项目交接文件，给新的聊天会话读 |
+| `lang [zh/en/ja]` | 切换 orch 提示的语言 |
 | `key set / list / remove 服务商`、`connect [服务商]` | 用你自己的模型账号 |
 | `mcp --project 目录` | MCP 服务：在 Claude Desktop 等聊天应用里查看、派发、运行任务 |
 | `api check 池名`、`usage rescan`、`status`、`merge`、`breaker` | 维护 |
@@ -119,6 +126,9 @@ python -m orch -p 你的仓库 report
 
 ## 更新记录
 
+- **0.3.5**：`orch agents` 总控面板：每个 agent 正在做什么、今天和这周的用量、订阅额度、最近成功率和最近一次出错，
+  可以暂停、恢复、换人。`orch sessions` 列出本机的 Claude Code、Codex 会话，包括你自己开的（只读时间、文件夹和 token 数）。
+  orch 的提示支持中文、英文、日文（`orch lang`、`--lang`，默认跟随系统语言）。
 - **0.3.4**：提前升级：一次运行什么都没改，或者验收报错和上一次完全一样，就马上换下一个模型（`[escalation] early_escalation`，默认打开）。
   README 写清楚了现在能用它做什么。
 - **0.3.2**：`orch key` 和 `orch connect`：在命令行里用你自己的 DeepSeek、GPT、Claude、千问、Gemini、豆包账号

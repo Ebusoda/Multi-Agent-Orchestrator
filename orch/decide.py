@@ -21,6 +21,7 @@ from . import workspace as ws
 from .adapters import Adapter, RunContext
 from .models import INFRA_FAILURES, RunResult, RunStatus, Task
 from .plan import PlanError, _finish_run
+from .i18n import tr
 
 DECIDE_INSTRUCTION = (
     "Read the file .task/DECIDE_PROMPT.md in the current directory and do what it asks. "
@@ -223,7 +224,7 @@ def _call(orch, did: str, pseudo: Task, wt: Path, out: Path, pool: str, adapter:
         run.pid = pid
         orch.store.save_run(run)
 
-    orch.say(f"[{did}] {run.id} -> {pool} ({adapter.vendor}) {step}" + ("（续用自己的会话）" if resume else "") + "...")
+    orch.say(f"[{did}] {run.id} -> {pool} ({adapter.vendor}) {step}" + (tr("（续用自己的会话）") if resume else "") + "...")
     ctx = RunContext(task=pseudo, worktree=wt, events_path=events,
                      timeout_s=orch._minutes("run_timeout_minutes", 45), model=adapter.model,
                      readonly=True, instruction=DECIDE_INSTRUCTION, resume_session=resume,
@@ -237,11 +238,11 @@ def _call(orch, did: str, pseudo: Task, wt: Path, out: Path, pool: str, adapter:
         raise KeyboardInterrupt
     if result.status in INFRA_FAILURES or result.status == RunStatus.TIMEOUT:
         orch.breakers.record_failure(pool, result.status, result.resets_at)
-        orch.say(f"[{did}] {pool} 失败（{result.status.value}）")
+        orch.say(tr("[{0}] {1} 失败（{2}）", did, pool, result.status.value))
         return None
     orch.breakers.record_success(pool)
     if result.status != RunStatus.COMPLETED or not (result.summary or "").strip():
-        orch.say(f"[{did}] {pool} 没有给出可用的回答（{result.status.value}）")
+        orch.say(tr("[{0}] {1} 没有给出可用的回答（{2}）", did, pool, result.status.value))
         return None
     return result
 
@@ -286,7 +287,7 @@ def run_decide(orch, question: str, context: str = "", language: str | None = No
         orch.store.update_decision(did, status="failed", error="no proposer pool gave an answer")
         raise DecideError(f"{did}: no proposer pool gave an answer (check `orch status` / breakers)")
     if len(proposers) == 1:
-        orch.say(f"[{did}] 只有一家给出了方案，跳过互评")
+        orch.say(tr("[{0}] 只有一家给出了方案，跳过互评", did))
 
     # 2. critiques: each proposer reviews the other's proposal
     critiques: dict[str, str] = {}  # label of the proposal -> critique of it
@@ -319,7 +320,7 @@ def run_decide(orch, question: str, context: str = "", language: str | None = No
             title, body = extract_adr(result.summary)
             judge_name = f"{pool} ({adapter.vendor})"
         except PlanError as e:
-            orch.say(f"[{did}] 裁判 {pool} 的回答格式不对（{e}）")
+            orch.say(tr("[{0}] 裁判 {1} 的回答格式不对（{2}）", did, pool, e))
             (out / "judge_raw.md").write_text(result.summary, encoding="utf-8")
     if not body:
         title = " ".join(question.split())[:80]
@@ -334,10 +335,10 @@ def run_decide(orch, question: str, context: str = "", language: str | None = No
                          "critiques": sorted(critiques)}, ensure_ascii=False)
     try:
         sha = commit_file(orch, repo_rel, adr, f"docs: ADR {num} {title} (proposed)")
-        orch.say(f"[{did}] ADR 已提交到 {orch.integration_branch}: {repo_rel}（{sha}）")
+        orch.say(tr("[{0}] ADR 已提交到 {1}: {2}（{3}）", did, orch.integration_branch, repo_rel, sha))
     except ws.GitError as e:
         repo_rel = ""
-        orch.say(f"[{did}] ADR 没能提交到 integration 分支: {e}")
+        orch.say(tr("[{0}] ADR 没能提交到 integration 分支: {1}", did, e))
     orch.store.update_decision(did, status="proposed", title=title, adr_path=str(out / "ADR.md"),
                                repo_path=repo_rel, detail=detail)
     return did
@@ -379,6 +380,6 @@ def set_status(orch, did: str, status: str) -> str:
     if row["repo_path"]:
         num = did.split("-")[-1]
         sha = commit_file(orch, row["repo_path"], text, f"docs: ADR {num} {status}")
-        msg = f"{orch.integration_branch}: {row['repo_path']}（{sha}）"
+        msg = tr("{0}: {1}（{2}）", orch.integration_branch, row['repo_path'], sha)
     orch.store.update_decision(did, status=status)
     return msg

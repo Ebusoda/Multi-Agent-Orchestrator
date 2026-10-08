@@ -24,6 +24,7 @@ from typing import Any
 from . import memory
 from .models import Task
 from .retrieval import CORE_KINDS, Scored, rank
+from .i18n import tr
 
 BUDGETS = {"small": 1500, "normal": 3000, "large": 6000, "deep": 12000}
 CLASS_BY_DIFFICULTY = {"S": "small", "M": "normal", "L": "large"}
@@ -174,9 +175,8 @@ def summary_line(m: dict[str, Any]) -> str:
     ptr = sum(1 for r in m["retrieved"] if r["mode"] == "pointer")
     drop = sum(1 for r in m["retrieved"] if r["mode"] == "dropped")
     budget = f"/{m['budget']:,}" if m.get("budget") else ""
-    over = " 超预算" if m.get("over_budget") else ""
-    return (f"上下文 {m['class']} {m['total']:,}{budget} tokens{over}；记忆 {m['memory_entries']} 条，"
-            f"注入 {full} 条全文、{ptr} 条指针，丢弃 {drop} 条")
+    over = tr(" 超预算") if m.get("over_budget") else ""
+    return (tr("上下文 {0} {1:,}{2} tokens{3}；记忆 {4} 条，注入 {5} 条全文、{6} 条指针，丢弃 {7} 条", m['class'], m['total'], budget, over, m['memory_entries'], full, ptr, drop))
 
 
 def dumps(m: dict[str, Any]) -> str:

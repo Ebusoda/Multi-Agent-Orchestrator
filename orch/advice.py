@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from .report import build_report
+from .i18n import tr
 
 MIN_SAMPLES = 5
 
@@ -73,19 +74,16 @@ def suggest(orch, min_samples: int | None = None) -> list[Advice]:
         stats = {"tasks": len(tasks), "started_on_first_pool": n, "first_pass": first, "escalated": escalated}
         label = f"{ttype}.{diff}"
         if n < min_n:
-            out.append(Advice("", key, route, "wait", f"{label}：从 {head} 起步的任务只有 {n} 个，"
-                              f"至少要 {min_n} 个才给建议", stats=stats))
+            out.append(Advice("", key, route, "wait", tr("{0}：从 {1} 起步的任务只有 {2} 个，至少要 {3} 个才给建议", label, head, n, min_n), stats=stats))
         elif escalated * 2 >= n and len(route) > 1:
             n_id += 1
             out.append(Advice(f"S-{n_id}", key, route, "drop-first",
-                              f"{label}：从 {head} 起步的 {n} 个任务里有 {escalated} 个升级到了后面的池，"
-                              f"直接从 {route[1]} 起步可以省掉失败的那几轮", new_route=route[1:], stats=stats))
+                              tr("{0}：从 {1} 起步的 {2} 个任务里有 {3} 个升级到了后面的池，直接从 {4} 起步可以省掉失败的那几轮", label, head, n, escalated, route[1]), new_route=route[1:], stats=stats))
         elif first * 5 >= n * 4:
-            out.append(Advice("", key, route, "keep", f"{label}：{head} 首次通过 {first}/{n}，保持现在的路由",
+            out.append(Advice("", key, route, "keep", tr("{0}：{1} 首次通过 {2}/{3}，保持现在的路由", label, head, first, n),
                               stats=stats))
         else:
-            out.append(Advice("", key, route, "wait", f"{label}：{head} 首次通过 {first}/{n}、升级 {escalated}/{n}，"
-                              "结果不一致，继续观察", stats=stats))
+            out.append(Advice("", key, route, "wait", tr("{0}：{1} 首次通过 {2}/{3}、升级 {4}/{5}，结果不一致，继续观察", label, head, first, n, escalated, n), stats=stats))
     return out
 
 
@@ -99,7 +97,7 @@ def apply(orch, advice_id: str) -> tuple[Path, str]:
     """Write the suggested route into .agents/orch.toml. Returns (backup path, new line)."""
     adv = next((a for a in suggest(orch) if a.id == advice_id), None)
     if adv is None:
-        raise ValueError(f"没有建议 {advice_id}（建议是按当前数据重新算的，先看 orch route suggest）")
+        raise ValueError(tr("没有建议 {0}（建议是按当前数据重新算的，先看 orch route suggest）", advice_id))
     path = orch.cfg.agents_dir / "orch.toml"
     text = path.read_text(encoding="utf-8")
     line = adv.toml_line()
@@ -108,7 +106,7 @@ def apply(orch, advice_id: str) -> tuple[Path, str]:
     if start is None:
         # routing comes from the built-in defaults: write them all out, or the new section would
         # replace every default route with this single line
-        block = ["", "[routing]", "# 由 orch route apply 写出（原来使用内置默认路由）"]
+        block = ["", "[routing]", tr("# 由 orch route apply 写出（原来使用内置默认路由）")]
         for k, v in orch.cfg.data["routing"].items():
             if isinstance(v, dict):
                 block += [f"{k}.{d} = {_render(r)}" for d, r in v.items()]
@@ -118,7 +116,7 @@ def apply(orch, advice_id: str) -> tuple[Path, str]:
         start = len(lines) - len(block) + 1
     end = next((i for i in range(start + 1, len(lines)) if lines[i].lstrip().startswith("[")), len(lines))
     pat = re.compile(rf"^\s*{re.escape(adv.key)}\s*=")
-    stamp = f"   # {time.strftime('%Y-%m-%d')} orch route apply {advice_id}（原为 {_render(adv.route)}）"
+    stamp = tr("   # {0} orch route apply {1}（原为 {2}）", time.strftime('%Y-%m-%d'), advice_id, _render(adv.route))
     for i in range(start + 1, end):
         if pat.match(lines[i]):
             lines[i] = line + stamp

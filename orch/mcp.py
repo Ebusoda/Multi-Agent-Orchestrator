@@ -124,6 +124,58 @@ class OrchTools:
     def context(self, project: str, task_id: str) -> dict:
         return {"output": self._orch(project, "context", task_id)}
 
+    # -- agent control panel ---------------------------------------------------------
+    def agents(self, project: str = "") -> dict:
+        """Every agent of one project, or of all projects plus totals per executor (one subscription
+        is shared by every project that uses it)."""
+        names = [project] if project else list(self.projects)
+        out, totals = [], {}
+        for name in names:
+            try:
+                p = json.loads(self._orch(name, "agents", "--json"))
+            except (ValueError, json.JSONDecodeError) as e:
+                out.append({"project": name, "error": str(e)[:500]})
+                continue
+            p["project"] = name
+            out.append(p)
+            for a in p["agents"]:
+                t = totals.setdefault(a["executor"], {"runs_today": 0, "cost_usd_today": 0.0, "tokens_today": 0,
+                                                      "working": 0})
+                t["runs_today"] += a["today"]["runs"]
+                t["cost_usd_today"] = round(t["cost_usd_today"] + a["today"]["cost_usd"], 4)
+                t["tokens_today"] += a["today"]["tokens_in"] + a["today"]["tokens_out"]
+                t["working"] += len(a["current"])
+        return {"projects": out, "by_executor": totals}
+
+    def pause(self, project: str, pool: str, minutes: float | None = None) -> dict:
+        args = ["agents", "pause", pool] + (["--minutes", str(minutes)] if minutes else [])
+        return {"output": self._orch(project, *args)}
+
+    def resume(self, project: str, pool: str) -> dict:
+        return {"output": self._orch(project, "agents", "resume", pool)}
+
+    def swap(self, project: str, task_id: str, pool: str) -> dict:
+        return {"output": self._orch(project, "agents", "swap", task_id, pool)}
+
+    def sessions(self, days: float = 7, include_orch: bool = False) -> dict:
+        """Claude Code / Codex sessions on this computer, the hand-opened ones included (orch/sessions.py:
+        times, folders and token counts only, never conversation content)."""
+        from . import sessions
+
+        data = sessions.scan(days=days)
+        if not include_orch:
+            data["sessions"] = [x for x in data["sessions"] if x["source"] == "manual"]
+        for x in data["sessions"]:
+            x.pop("log", None)
+        data["sessions"] = data["sessions"][:50]
+        return data
+
+    def retry(self, project: str, task_id: str) -> dict:
+        return {"output": self._orch(project, "task", "retry", task_id)}
+
+    def cancel(self, project: str, task_id: str) -> dict:
+        return {"output": self._orch(project, "task", "cancel", task_id)}
+
 
 def _detached() -> dict:
     if sys.platform == "win32":
@@ -164,6 +216,35 @@ TOOLS: list[dict[str, Any]] = [
      "step for high-risk tasks; only call it when the user asked for it).",
      "inputSchema": {"type": "object", "properties": {**_P, "task_id": {"type": "string"}},
                      "required": ["project", "task_id"]}},
+    {"name": "orch_agents", "description": "Control panel: every agent (pool) with its current task, use today and "
+     "over 7 days, subscription windows, recent success rate, last error and whether it is paused. Leave project "
+     "empty for all projects.",
+     "inputSchema": {"type": "object", "properties": {"project": {"type": "string", "description": "optional"}}}},
+    {"name": "orch_pause", "description": "Pause an agent: it gets no new tasks (running work is not interrupted). "
+     "Without minutes it stays paused until orch_resume.",
+     "inputSchema": {"type": "object", "properties": {**_P, "pool": {"type": "string"},
+                                                       "minutes": {"type": "number"}},
+                     "required": ["project", "pool"]}},
+    {"name": "orch_resume", "description": "Resume a paused (or cooling) agent.",
+     "inputSchema": {"type": "object", "properties": {**_P, "pool": {"type": "string"}},
+                     "required": ["project", "pool"]}},
+    {"name": "orch_swap", "description": "Give a task to another agent: that pool goes first in the task's route "
+     "and the task is queued again. Not for running, verified or merged tasks.",
+     "inputSchema": {"type": "object", "properties": {**_P, "task_id": {"type": "string"}, "pool": {"type": "string"}},
+                     "required": ["project", "task_id", "pool"]}},
+    {"name": "orch_sessions", "description": "Claude Code and Codex sessions on this computer, including the ones "
+     "the user opened by hand: project folder, model, when last used, whether in use now, tokens (today and in "
+     "total), plus Codex's subscription windows. Conversation content is never read.",
+     "inputSchema": {"type": "object", "properties": {
+         "days": {"type": "number", "description": "how far back (default 7)"},
+         "include_orch": {"type": "boolean", "description": "also list sessions orch started itself"}}}},
+    {"name": "orch_retry", "description": "Queue a blocked, failed or cancelled task again.",
+     "inputSchema": {"type": "object", "properties": {**_P, "task_id": {"type": "string"}},
+                     "required": ["project", "task_id"]}},
+    {"name": "orch_cancel", "description": "Cancel a queued, blocked or failed task (orch_retry brings it back). "
+     "Only call it when the user asked for it.",
+     "inputSchema": {"type": "object", "properties": {**_P, "task_id": {"type": "string"}},
+                     "required": ["project", "task_id"]}},
 ]
 
 
@@ -181,6 +262,13 @@ class Server:
             "orch_report": lambda a: tools.report(a["project"]),
             "orch_context": lambda a: tools.context(a["project"], a["task_id"]),
             "orch_merge": lambda a: tools.merge(a["project"], a["task_id"]),
+            "orch_agents": lambda a: tools.agents(a.get("project", "")),
+            "orch_pause": lambda a: tools.pause(a["project"], a["pool"], a.get("minutes")),
+            "orch_resume": lambda a: tools.resume(a["project"], a["pool"]),
+            "orch_swap": lambda a: tools.swap(a["project"], a["task_id"], a["pool"]),
+            "orch_sessions": lambda a: tools.sessions(a.get("days", 7), a.get("include_orch", False)),
+            "orch_retry": lambda a: tools.retry(a["project"], a["task_id"]),
+            "orch_cancel": lambda a: tools.cancel(a["project"], a["task_id"]),
         }
 
     def handle(self, msg: dict) -> dict | None:

@@ -64,6 +64,7 @@ class Task:
     note: str = ""                 # last orchestrator note (why blocked, merge conflict, ...)
     review_rounds: int = 0         # times a reviewer sent the task back (M5)
     review: str = "auto"           # auto | always | never (V2-3; auto = config decides)
+    pin: str = ""                  # pool chosen by hand (`orch agents swap`): goes first in the route
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
 
