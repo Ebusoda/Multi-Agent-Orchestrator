@@ -353,7 +353,7 @@ def commit_file(orch, repo_rel: str, text: str, message: str) -> str:
     ws.git(["add", "--", repo_rel], integ_wt)
     if not ws.git(["status", "--porcelain", "--", repo_rel], integ_wt):
         return ws.git(["rev-parse", "--short", "HEAD"], integ_wt)
-    ws.git([*ws.ORCH_IDENT, "commit", "--no-verify", "-q", "-m", message], integ_wt)
+    ws.git([*ws.ident(integ_wt), "commit", "--no-verify", "-q", "-m", message], integ_wt)
     sha = ws.git(["rev-parse", "--short", "HEAD"], integ_wt)
     from . import memory  # the ADR index in docs/project/DECISIONS.md follows every ADR change
 

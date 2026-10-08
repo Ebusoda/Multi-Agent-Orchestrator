@@ -11,7 +11,25 @@ from pathlib import Path
 from .proc import child_env
 
 # gc.auto=0: orch commits in several worktrees at once; an automatic gc must not race them.
-ORCH_IDENT = ["-c", "user.name=orch", "-c", "user.email=orch@localhost", "-c", "gc.auto=0"]
+NO_GC = ["-c", "gc.auto=0"]
+# Last resort only (demo / test repos, or a machine with no git identity at all).
+ORCH_IDENT = ["-c", "user.name=orch", "-c", "user.email=orch@localhost", *NO_GC]
+_configured: tuple[str, str] | None = None   # [git] name / email from the project's orch.toml
+
+
+def set_identity(name: str, email: str) -> None:
+    """Who orch's own commits (checkpoints, merges, project memory) are made as. Empty = not set."""
+    global _configured
+    _configured = (name.strip(), email.strip()) if name.strip() and email.strip() else None
+
+
+def ident(cwd: Path) -> list[str]:
+    """Commit identity for orch's own commits: orch.toml [git] -> the project's git config -> orch."""
+    if _configured:
+        return ["-c", f"user.name={_configured[0]}", "-c", f"user.email={_configured[1]}", *NO_GC]
+    if git(["config", "--get", "user.name"], cwd, check=False) and git(["config", "--get", "user.email"], cwd, check=False):
+        return list(NO_GC)
+    return list(ORCH_IDENT)
 EXCLUDES = [".task/", ".agents/"]
 
 
@@ -134,7 +152,7 @@ def checkpoint(wt: Path, message: str) -> str | None:
     if not dirty(wt):
         return None
     git(["add", "-A"], wt)
-    git([*ORCH_IDENT, "commit", "--no-verify", "-q", "-m", message], wt)
+    git([*ident(wt), "commit", "--no-verify", "-q", "-m", message], wt)
     return git(["rev-parse", "--short", "HEAD"], wt)
 
 
@@ -143,7 +161,7 @@ def snapshot(wt: Path, ref: str) -> str | None:
 
     Safe to call while an agent is still editing (used for mid-run recovery points).
     """
-    sha = git([*ORCH_IDENT, "stash", "create"], wt, check=False)
+    sha = git([*ident(wt), "stash", "create"], wt, check=False)
     if not sha:
         return None
     git(["update-ref", ref, sha], wt)
@@ -163,10 +181,10 @@ def diff_stat(wt: Path, base: str) -> str:
 
 def squash_merge(integ_wt: Path, branch: str, message: str) -> tuple[bool, str]:
     """Squash-merge `branch` into the branch checked out at integ_wt. Returns (ok, detail)."""
-    # ORCH_IDENT: a squash that is not a fast-forward (the integration branch moved on, e.g. a
+    # ident(): a squash that is not a fast-forward (the integration branch moved on, e.g. a
     # parallel task merged first) needs a committer identity even though it does not commit.
     p = subprocess.run(
-        ["git", *ORCH_IDENT, "merge", "--squash", branch],
+        ["git", *ident(integ_wt), "merge", "--squash", branch],
         cwd=str(integ_wt),
         capture_output=True,
         stdin=subprocess.DEVNULL,
@@ -178,7 +196,7 @@ def squash_merge(integ_wt: Path, branch: str, message: str) -> tuple[bool, str]:
         return False, detail.strip()
     if not dirty(integ_wt):
         return True, "nothing to merge"
-    git([*ORCH_IDENT, "commit", "--no-verify", "-q", "-m", message], integ_wt)
+    git([*ident(integ_wt), "commit", "--no-verify", "-q", "-m", message], integ_wt)
     return True, git(["rev-parse", "--short", "HEAD"], integ_wt)
 
 

@@ -177,7 +177,7 @@ def _commit(orch, wt: Path, names: list[str], message: str) -> str | None:
     ws.git(["add", "--", *rels], wt)
     if not ws.git(["status", "--porcelain", "--", *rels], wt):
         return None
-    ws.git([*ws.ORCH_IDENT, "commit", "--no-verify", "-q", "-m", message], wt)
+    ws.git([*ws.ident(wt), "commit", "--no-verify", "-q", "-m", message], wt)
     return ws.git(["rev-parse", "--short", "HEAD"], wt)
 
 

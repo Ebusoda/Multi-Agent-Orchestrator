@@ -63,6 +63,12 @@ max_tokens_per_task = 0                # 所有池的输入 + 输出 token（订
 baseline = []                          # 例如 ["python -m unittest -q"]
 resolve_conflicts = true               # 合并冲突时，把 integration 合进任务分支，交给 agent 解决；没有冲突标记且验收通过才合并
 
+[git]
+# orch 自己做的提交（checkpoint、合并、项目记忆、决策记录）用谁的名字。
+# 空 = 用这个项目的 git 配置（git config user.name / user.email）；都没有时才用 orch <orch@localhost>。
+name = ""                              # 例如 "Your Name"
+email = ""                             # 例如 "you@example.com"
+
 [approval]
 manual_merge_risk = ["high", "critical"]   # 这些风险等级的任务即使 run --auto-merge 也不自动合并，等你 orch merge
 
@@ -190,6 +196,10 @@ class Config:
         data.setdefault("routing", copy.deepcopy(DEFAULTS["routing"]))
         data.setdefault("pools", copy.deepcopy(DEFAULTS["pools"]))
         data["executors"] = _deep_merge(DEFAULTS["executors"], user.get("executors", {}))
+        from . import workspace  # orch's own commits follow [git]
+
+        g = data.get("git", {})
+        workspace.set_identity(str(g.get("name") or ""), str(g.get("email") or ""))
         return cls(project, data)
 
     # -- paths -------------------------------------------------------------

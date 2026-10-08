@@ -124,7 +124,7 @@ def export(orch, out: Path | None = None, commit: bool = True) -> tuple[Path, st
             rel = f"{memory.MEMORY_DIR}/{CHECKPOINT_FILE}"
             ws.git(["add", "--", rel], wt)
             if ws.git(["status", "--porcelain", "--", rel], wt):
-                ws.git([*ws.ORCH_IDENT, "commit", "--no-verify", "-q", "-m", "docs: project checkpoint"], wt)
+                ws.git([*ws.ident(wt), "commit", "--no-verify", "-q", "-m", "docs: project checkpoint"], wt)
                 sha = ws.git(["rev-parse", "--short", "HEAD"], wt)
     return path, sha
 

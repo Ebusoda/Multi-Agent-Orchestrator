@@ -582,10 +582,10 @@ class Orchestrator:
             return False
         integ = self.integration_branch
         with self.git_lock:
-            ws.git([*ws.ORCH_IDENT, "merge", "--no-ff", "--no-commit", integ], wt, check=False)
+            ws.git([*ws.ident(wt), "merge", "--no-ff", "--no-commit", integ], wt, check=False)
         files = [f for f in ws.git(["diff", "--name-only", "--diff-filter=U"], wt, check=False).splitlines() if f]
         if not files:  # git merged it cleanly in this direction
-            ws.git([*ws.ORCH_IDENT, "commit", "--no-verify", "-q", "-m", f"merge {integ} into {task.branch}"],
+            ws.git([*ws.ident(wt), "commit", "--no-verify", "-q", "-m", f"merge {integ} into {task.branch}"],
                    wt, check=False)
             return True
         self.say(f"[{task.id}] 合并冲突：{', '.join(files)}，交给 agent 解决")
@@ -617,7 +617,7 @@ class Orchestrator:
         if resolved:
             with self.git_lock:
                 ws.git(["add", "-A"], wt)
-                ws.git([*ws.ORCH_IDENT, "commit", "--no-verify", "-q", "-m",
+                ws.git([*ws.ident(wt), "commit", "--no-verify", "-q", "-m",
                         f"merge {integ} into {task.branch} (conflicts resolved by {pool})"], wt)
             self.store.log("conflict_resolved", f"{pool}: {', '.join(files)}", task_id=task.id)
             self.say(f"[{task.id}] 冲突已由 {pool} 解决，验收通过")
